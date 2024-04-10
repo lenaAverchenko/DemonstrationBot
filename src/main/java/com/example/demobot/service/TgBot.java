@@ -10,12 +10,15 @@ import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
@@ -78,11 +81,79 @@ public class TgBot extends TelegramLongPollingBot {
                 case "/help":
                     sendMessage(chatId, HELP_TEXT);
                     break;
+                case "/register":
+                    register(chatId);
+                    break;
                 default:
                     sendMessage(chatId, "Sorry, command was not recognised");
             }
+        } else if (update.hasCallbackQuery()) {
+//            это и есть ид кнопки (CallbackData), которую мы назначаем кнопкам
+            String callbackData = update.getCallbackQuery().getData();
+//            Передался ли ид кнопки? у каждого смс также есть свое ид
+            long messageId = update.getCallbackQuery().getMessage().getMessageId();
+            long chatId = update.getCallbackQuery().getMessage().getChatId();
+
+            if (callbackData.equals("YES_BUTTON")){
+                String text = "You pressed YES button";
+//                Заменяем текст того сообщения, которое мы отослали, когда знаем инд сообщения
+                EditMessageText message = new EditMessageText();
+                message.setChatId(String.valueOf(chatId));
+                message.setText(text);
+                message.setMessageId(Integer.parseInt(String.valueOf(messageId)));
+                try {
+                    execute(message);
+                } catch (TelegramApiException e) {
+                    log.error("Error occurred: " + e.getMessage());
+                }
+
+            } else if (callbackData.equals("NO_BUTTON")) {
+                String text = "You pressed NO button";
+                EditMessageText message = new EditMessageText();
+                message.setChatId(String.valueOf(chatId));
+                message.setText(text);
+                message.setMessageId(Integer.parseInt(String.valueOf(messageId)));
+                try {
+                    execute(message);
+                } catch (TelegramApiException e) {
+                    log.error("Error occurred: " + e.getMessage());
+                }
+            }
+
         }
 
+    }
+
+    private void register(long chatId) {
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText("Do you really want to register?");
+
+        InlineKeyboardMarkup markupInline = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
+        List<InlineKeyboardButton> rowInline = new ArrayList<>();
+
+        InlineKeyboardButton yesButton = new InlineKeyboardButton();
+        yesButton.setText("Yes");
+//        id of the button "yes"
+        yesButton.setCallbackData("YES_BUTTON");
+
+        InlineKeyboardButton noButton = new InlineKeyboardButton();
+        noButton.setText("No");
+//        id of the button "no"
+        noButton.setCallbackData("NO_BUTTON");
+
+        rowInline.add(yesButton);
+        rowInline.add(noButton);
+        rowsInline.add(rowInline);
+        markupInline.setKeyboard(rowsInline);
+        message.setReplyMarkup(markupInline);
+
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.error("Error occurred: " + e.getMessage());
+        }
     }
 
     private void startCommandReceived(long chatId, String name) {
@@ -109,14 +180,14 @@ public class TgBot extends TelegramLongPollingBot {
 
         List<KeyboardRow> keyboardRows = new ArrayList<>();
         KeyboardRow row = new KeyboardRow();
-        row.add("weather");
-        row.add("get random joke");
+        row.add("/weather");
+        row.add("/get random joke");
 
         keyboardRows.add(row);
         row = new KeyboardRow();
-        row.add("register");
-        row.add("check my data");
-        row.add("delete my data");
+        row.add("/register");
+        row.add("/check my data");
+        row.add("/delete my data");
         keyboardRows.add(row);
 
         keyboardMarkup.setKeyboard(keyboardRows);
