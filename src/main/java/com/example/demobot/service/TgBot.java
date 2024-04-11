@@ -73,6 +73,14 @@ public class TgBot extends TelegramLongPollingBot {
         if (update.hasMessage() && update.getMessage().hasText()) {
             String mesText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
+//            Проверка на то, отсылает ли сообщение собственник + рассылка непредвиденного сообщения, без автоматизации
+            if(mesText.contains("/send") && config.getOwnerId() == chatId){
+                String textToSend = EmojiParser.parseToUnicode(mesText.substring(mesText.indexOf(" ")));
+                List<TgUser> users = userRepository.findAll();
+                for (TgUser us:users) {
+                    sendMessage(us.getChatId(), textToSend);
+                }
+            }
             switch (mesText) {
                 case "/start":
                     registerUser(update.getMessage());
@@ -83,6 +91,8 @@ public class TgBot extends TelegramLongPollingBot {
                     break;
                 case "/register":
                     register(chatId);
+                    break;
+                case "/send":
                     break;
                 default:
                     sendMessage(chatId, "Sorry, command was not recognised");
@@ -119,9 +129,7 @@ public class TgBot extends TelegramLongPollingBot {
                     log.error("Error occurred: " + e.getMessage());
                 }
             }
-
         }
-
     }
 
     private void register(long chatId) {
