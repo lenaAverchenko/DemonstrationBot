@@ -34,13 +34,16 @@ public class TgBot extends TelegramLongPollingBot {
     @Autowired
     private TgUserRepository userRepository;
     final BotConfig config;
-    static final String HELP_TEXT = "This bot is created to demonstrate Spring capabilities.\n\n"+
+    static final String HELP_TEXT = "This bot is created to demonstrate Spring capabilities.\n\n" +
             "You can execute commands from the main menu on the left or by typing a command:\n\n" +
             "Type /start to see a welcome message\n\n" +
             "Type /mydata to see data stored about yourself\n\n" +
             "Type /deletedata to delete stored data about yourself\n\n" +
             "Type /help to see this message again\n\n" +
             "Type /settings to change settings for more preferable\n\n";
+    static final String YES_BUTTON = "YES_BUTTON";
+    static final String NO_BUTTON = "NO_BUTTON";
+    static final String ERROR_TEXT = "Error occurred: ";
 
 
     public TgBot(BotConfig config) {
@@ -74,28 +77,29 @@ public class TgBot extends TelegramLongPollingBot {
             String mesText = update.getMessage().getText();
             long chatId = update.getMessage().getChatId();
 //            Проверка на то, отсылает ли сообщение собственник + рассылка непредвиденного сообщения, без автоматизации
-            if(mesText.contains("/send") && config.getOwnerId() == chatId){
+            if (mesText.contains("/send") && config.getOwnerId() == chatId) {
                 String textToSend = EmojiParser.parseToUnicode(mesText.substring(mesText.indexOf(" ")));
                 List<TgUser> users = userRepository.findAll();
-                for (TgUser us:users) {
-                    sendMessage(us.getChatId(), textToSend);
+                for (TgUser us : users) {
+                    prepareAndSendMessage(us.getChatId(), textToSend);
                 }
-            }
-            switch (mesText) {
-                case "/start":
-                    registerUser(update.getMessage());
-                    startCommandReceived(chatId, update.getMessage().getChat().getFirstName());
-                    break;
-                case "/help":
-                    sendMessage(chatId, HELP_TEXT);
-                    break;
-                case "/register":
-                    register(chatId);
-                    break;
-                case "/send":
-                    break;
-                default:
-                    sendMessage(chatId, "Sorry, command was not recognised");
+            } else {
+                switch (mesText) {
+                    case "/start":
+                        registerUser(update.getMessage());
+                        startCommandReceived(chatId, update.getMessage().getChat().getFirstName());
+                        break;
+                    case "/help":
+                        prepareAndSendMessage(chatId, HELP_TEXT);
+                        break;
+                    case "/register":
+                        register(chatId);
+                        break;
+                    case "/send":
+                        break;
+                    default:
+                        prepareAndSendMessage(chatId, "Sorry, command was not recognised");
+                }
             }
         } else if (update.hasCallbackQuery()) {
 //            это и есть ид кнопки (CallbackData), которую мы назначаем кнопкам
@@ -104,31 +108,25 @@ public class TgBot extends TelegramLongPollingBot {
             long messageId = update.getCallbackQuery().getMessage().getMessageId();
             long chatId = update.getCallbackQuery().getMessage().getChatId();
 
-            if (callbackData.equals("YES_BUTTON")){
-                String text = "You pressed YES button";
-//                Заменяем текст того сообщения, которое мы отослали, когда знаем инд сообщения
-                EditMessageText message = new EditMessageText();
-                message.setChatId(String.valueOf(chatId));
-                message.setText(text);
-                message.setMessageId(Integer.parseInt(String.valueOf(messageId)));
-                try {
-                    execute(message);
-                } catch (TelegramApiException e) {
-                    log.error("Error occurred: " + e.getMessage());
-                }
+            if (callbackData.equals(YES_BUTTON)) {
+                executeEditMessageText("You pressed YES button", chatId, messageId);
 
-            } else if (callbackData.equals("NO_BUTTON")) {
-                String text = "You pressed NO button";
-                EditMessageText message = new EditMessageText();
-                message.setChatId(String.valueOf(chatId));
-                message.setText(text);
-                message.setMessageId(Integer.parseInt(String.valueOf(messageId)));
-                try {
-                    execute(message);
-                } catch (TelegramApiException e) {
-                    log.error("Error occurred: " + e.getMessage());
-                }
+            } else if (callbackData.equals(NO_BUTTON)) {
+                executeEditMessageText("You pressed NO button", chatId, messageId);
             }
+        }
+    }
+
+    private void executeEditMessageText(String text, long chatId, long messageId) {
+//                Заменяем текст того сообщения, которое мы отослали, когда знаем инд сообщения
+        EditMessageText message = new EditMessageText();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(text);
+        message.setMessageId(Integer.parseInt(String.valueOf(messageId)));
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.error(ERROR_TEXT + e.getMessage());
         }
     }
 
@@ -144,12 +142,12 @@ public class TgBot extends TelegramLongPollingBot {
         InlineKeyboardButton yesButton = new InlineKeyboardButton();
         yesButton.setText("Yes");
 //        id of the button "yes"
-        yesButton.setCallbackData("YES_BUTTON");
+        yesButton.setCallbackData(YES_BUTTON);
 
         InlineKeyboardButton noButton = new InlineKeyboardButton();
         noButton.setText("No");
 //        id of the button "no"
-        noButton.setCallbackData("NO_BUTTON");
+        noButton.setCallbackData(NO_BUTTON);
 
         rowInline.add(yesButton);
         rowInline.add(noButton);
@@ -157,15 +155,19 @@ public class TgBot extends TelegramLongPollingBot {
         markupInline.setKeyboard(rowsInline);
         message.setReplyMarkup(markupInline);
 
+        executeMessage(message);
+    }
+
+    private void executeMessage(SendMessage message) {
         try {
             execute(message);
         } catch (TelegramApiException e) {
-            log.error("Error occurred: " + e.getMessage());
+            log.error(ERROR_TEXT + e.getMessage());
         }
     }
 
     private void startCommandReceived(long chatId, String name) {
-        String answer = EmojiParser.parseToUnicode("Hi, " + name + ", nice to meet you!" + " :blush: ") ;
+        String answer = EmojiParser.parseToUnicode("Hi, " + name + ", nice to meet you!" + " :blush: ");
         log.info("Replied to user " + name);
         sendMessage(chatId, answer);
     }
@@ -176,11 +178,15 @@ public class TgBot extends TelegramLongPollingBot {
         message.setText(textToSend);
         createQuickReplies(message);
 
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error("Error occurred: " + e.getMessage());
-        }
+        executeMessage(message);
+
+    }
+
+    private void prepareAndSendMessage(long chatId, String textToSend) {
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(textToSend);
+        executeMessage(message);
     }
 
     private void createQuickReplies(SendMessage message) {
@@ -202,8 +208,8 @@ public class TgBot extends TelegramLongPollingBot {
         message.setReplyMarkup(keyboardMarkup);
     }
 
-    private void registerUser(Message message){
-        if (userRepository.findById(message.getChatId()).isEmpty()){
+    private void registerUser(Message message) {
+        if (userRepository.findById(message.getChatId()).isEmpty()) {
             long chatId = message.getChatId();
             Chat chat = message.getChat();
             TgUser userToRegister = new TgUser();
