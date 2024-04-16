@@ -1,11 +1,14 @@
 package com.example.demobot.service;
 
 import com.example.demobot.config.BotConfig;
+import com.example.demobot.entity.Ads;
 import com.example.demobot.entity.TgUser;
+import com.example.demobot.repository.AdsRepository;
 import com.example.demobot.repository.TgUserRepository;
 import com.vdurmont.emoji.EmojiParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
@@ -30,6 +33,9 @@ import java.util.List;
 @Service
 
 public class TgBot extends TelegramLongPollingBot {
+
+    @Autowired
+    private AdsRepository adsRepository;
 
     @Autowired
     private TgUserRepository userRepository;
@@ -220,6 +226,17 @@ public class TgBot extends TelegramLongPollingBot {
             userToRegister.setRegisteredAt(new Timestamp(System.currentTimeMillis()));
             userRepository.save(userToRegister);
             log.info("user saved " + userToRegister);
+        }
+    }
+
+    @Scheduled(cron = "${cron.scheduler}")
+    private void sendAds(){
+        List<Ads> adsList = adsRepository.findAll();
+        List<TgUser> tgUsers = userRepository.findAll();
+        for (Ads ad: adsList){
+            for (TgUser us : tgUsers) {
+                prepareAndSendMessage(us.getChatId(), ad.getAd());
+            }
         }
     }
 }
